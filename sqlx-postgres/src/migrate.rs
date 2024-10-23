@@ -16,6 +16,11 @@ use crate::query_as::query_as;
 use crate::query_scalar::query_scalar;
 use crate::{PgConnectOptions, PgConnection, Postgres};
 
+lazy_static::lazy_static! {
+    static ref MIGRATIONS_TABLE: String = std::env::var("SQLX_MIGRATIONS_TABLE").unwrap_or_else(|_| "_sqlx_migrations".into());
+    static ref MIGRATIONS_SCHEMA: String = std::env::var("SQLX_MIGRATIONS_SCHEMA").unwrap_or_else(|_| "public".into());
+}
+
 fn parse_for_maintenance(url: &str) -> Result<(PgConnectOptions, String), Error> {
     let mut options = PgConnectOptions::from_str(url)?;
 
@@ -113,10 +118,17 @@ impl MigrateDatabase for Postgres {
 impl Migrate for PgConnection {
     fn ensure_migrations_table(&mut self) -> BoxFuture<'_, Result<(), MigrateError>> {
         Box::pin(async move {
+            // First ensure the schema exists
+            self.execute(&*format!(
+                r#"CREATE SCHEMA IF NOT EXISTS {}"#,
+                *MIGRATIONS_SCHEMA
+            ))
+            .await?;
+
             // language=SQL
-            self.execute(
+            self.execute(&*format!(
                 r#"
-CREATE TABLE IF NOT EXISTS _sqlx_migrations (
+CREATE TABLE IF NOT EXISTS {}.{} (
     version BIGINT PRIMARY KEY,
     description TEXT NOT NULL,
     installed_on TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -125,7 +137,8 @@ CREATE TABLE IF NOT EXISTS _sqlx_migrations (
     execution_time BIGINT NOT NULL
 );
                 "#,
-            )
+                *MIGRATIONS_SCHEMA, *MIGRATIONS_TABLE
+            ))
             .await?;
 
             Ok(())
@@ -135,9 +148,10 @@ CREATE TABLE IF NOT EXISTS _sqlx_migrations (
     fn dirty_version(&mut self) -> BoxFuture<'_, Result<Option<i64>, MigrateError>> {
         Box::pin(async move {
             // language=SQL
-            let row: Option<(i64,)> = query_as(
-                "SELECT version FROM _sqlx_migrations WHERE success = false ORDER BY version LIMIT 1",
-            )
+            let row: Option<(i64,)> = query_as(&format!(
+                "SELECT version FROM {}.{} WHERE success = false ORDER BY version LIMIT 1",
+                *MIGRATIONS_SCHEMA, *MIGRATIONS_TABLE
+            ))
             .fetch_optional(self)
             .await?;
 
@@ -150,10 +164,12 @@ CREATE TABLE IF NOT EXISTS _sqlx_migrations (
     ) -> BoxFuture<'_, Result<Vec<AppliedMigration>, MigrateError>> {
         Box::pin(async move {
             // language=SQL
-            let rows: Vec<(i64, Vec<u8>)> =
-                query_as("SELECT version, checksum FROM _sqlx_migrations ORDER BY version")
-                    .fetch_all(self)
-                    .await?;
+            let rows: Vec<(i64, Vec<u8>)> = query_as(&format!(
+                "SELECT version, checksum FROM {}.{} ORDER BY version",
+                *MIGRATIONS_SCHEMA, *MIGRATIONS_TABLE
+            ))
+            .fetch_all(self)
+            .await?;
 
             let migrations = rows
                 .into_iter()
@@ -231,13 +247,14 @@ CREATE TABLE IF NOT EXISTS _sqlx_migrations (
 
             // language=SQL
             #[allow(clippy::cast_possible_truncation)]
-            let _ = query(
+            let _ = query(&format!(
                 r#"
-    UPDATE _sqlx_migrations
+    UPDATE {}.{} 
     SET execution_time = $1
     WHERE version = $2
                 "#,
-            )
+                *MIGRATIONS_SCHEMA, *MIGRATIONS_TABLE
+            ))
             .bind(elapsed.as_nanos() as i64)
             .bind(migration.version)
             .execute(self)
@@ -282,12 +299,13 @@ async fn execute_migration(
         .map_err(|e| MigrateError::ExecuteMigration(e, migration.version))?;
 
     // language=SQL
-    let _ = query(
+    let _ = query(&*format!(
         r#"
-    INSERT INTO _sqlx_migrations ( version, description, success, checksum, execution_time )
+    INSERT INTO {}.{} ( version, description, success, checksum, execution_time )
     VALUES ( $1, $2, TRUE, $3, -1 )
                 "#,
-    )
+        *MIGRATIONS_SCHEMA, *MIGRATIONS_TABLE
+    ))
     .bind(migration.version)
     .bind(&*migration.description)
     .bind(&*migration.checksum)
@@ -307,10 +325,13 @@ async fn revert_migration(
         .map_err(|e| MigrateError::ExecuteMigration(e, migration.version))?;
 
     // language=SQL
-    let _ = query(r#"DELETE FROM _sqlx_migrations WHERE version = $1"#)
-        .bind(migration.version)
-        .execute(conn)
-        .await?;
+    let _ = query(&format!(
+        r#"DELETE FROM {}.{} WHERE version = $1"#,
+        *MIGRATIONS_SCHEMA, *MIGRATIONS_TABLE
+    ))
+    .bind(migration.version)
+    .execute(conn)
+    .await?;
 
     Ok(())
 }

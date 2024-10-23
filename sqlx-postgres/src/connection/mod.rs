@@ -32,6 +32,8 @@ mod tls;
 /// A connection to a PostgreSQL database.
 pub struct PgConnection {
     pub(crate) inner: Box<PgConnectionInner>,
+    // pub migration_table: String,
+    // pub migration_schema: Option<String>
 }
 
 pub struct PgConnectionInner {

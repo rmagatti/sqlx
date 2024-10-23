@@ -141,6 +141,8 @@ pub(crate) fn from_url(url: &Url) -> crate::Result<&'static AnyDriver> {
         .get()
         .expect("No drivers installed. Please see the documentation in `sqlx::any` for details.");
 
+    tracing::debug!("Drivers: {:?}", drivers);
+
     drivers
         .iter()
         .find(|driver| driver.url_schemes.contains(&url.scheme()))
