@@ -136,8 +136,10 @@ SQLx is compatible with the [`async-std`], [`tokio`], and [`actix`] runtimes; an
 sqlx = { version = "0.8", features = [ "runtime-tokio" ] }
 # tokio + native-tls
 sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-native-tls" ] }
-# tokio + rustls with ring
-sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-rustls-ring" ] }
+# tokio + rustls with ring and WebPKI CA certificates
+sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-rustls-ring-webpki" ] }
+# tokio + rustls with ring and platform's native CA certificates
+sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-rustls-ring-native-roots" ] }
 # tokio + rustls with aws-lc-rs
 sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-rustls-aws-lc-rs" ] }
 
@@ -145,8 +147,10 @@ sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-rustls-aws-lc-rs" ]
 sqlx = { version = "0.8", features = [ "runtime-async-std" ] }
 # async-std + native-tls
 sqlx = { version = "0.8", features = [ "runtime-async-std", "tls-native-tls" ] }
-# async-std + rustls with ring
-sqlx = { version = "0.8", features = [ "runtime-async-std", "tls-rustls-ring" ] }
+# async-std + rustls with ring and WebPKI CA certificates
+sqlx = { version = "0.8", features = [ "runtime-async-std", "tls-rustls-ring-webpki" ] }
+# async-std + rustls with ring and platform's native CA certificates
+sqlx = { version = "0.8", features = [ "runtime-async-std", "tls-rustls-ring-native-roots" ] }
 # async-std + rustls with aws-lc-rs
 sqlx = { version = "0.8", features = [ "runtime-async-std", "tls-rustls-aws-lc-rs" ] }
 ```
@@ -192,6 +196,10 @@ be removed in the future.
     * May result in link errors if the SQLite version is too old. Version `3.20.0` or newer is recommended.
     * Can increase build time due to the use of bindgen.
 
+-   `sqlite-preupdate-hook`: enables SQLite's [preupdate hook](https://sqlite.org/c3ref/preupdate_count.html) API.
+    * Exposed as a separate feature because it's generally not enabled by default.
+    * Using this feature with `sqlite-unbundled` may cause linker failures if the system SQLite version does not support it.
+
 -   `any`: Add support for the `Any` database driver, which can proxy to a database driver at runtime.
 
 -   `derive`: Add support for the derive family macros, those are `FromRow`, `Type`, `Encode`, `Decode`.
@@ -200,7 +208,7 @@ be removed in the future.
 
 -   `migrate`: Add support for the migration management and `migrate!` macro, which allow compile-time embedded migrations.
 
--   `uuid`: Add support for UUID (in Postgres).
+-   `uuid`: Add support for UUID.
 
 -   `chrono`: Add support for date and time types from `chrono`.
 
@@ -211,6 +219,8 @@ be removed in the future.
 -   `bigdecimal`: Add support for `NUMERIC` using the `bigdecimal` crate.
 
 -   `rust_decimal`: Add support for `NUMERIC` using the `rust_decimal` crate.
+
+-   `ipnet`: Add support for `INET` and `CIDR` (in postgres) using the `ipnet` crate.
 
 -   `ipnetwork`: Add support for `INET` and `CIDR` (in postgres) using the `ipnetwork` crate.
 

@@ -67,6 +67,13 @@ pub use bigdecimal::BigDecimal;
 #[doc(no_inline)]
 pub use rust_decimal::Decimal;
 
+#[cfg(feature = "ipnet")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ipnet")))]
+pub mod ipnet {
+    #[doc(no_inline)]
+    pub use ipnet::{IpNet, Ipv4Net, Ipv6Net};
+}
+
 #[cfg(feature = "ipnetwork")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ipnetwork")))]
 pub mod ipnetwork {
@@ -84,6 +91,9 @@ pub mod mac_address {
 #[cfg(feature = "json")]
 pub use json::{Json, JsonRawValue, JsonValue};
 pub use text::Text;
+
+#[cfg(feature = "bstr")]
+pub use bstr::{BStr, BString};
 
 /// Indicates that a SQL type is supported for a database.
 ///

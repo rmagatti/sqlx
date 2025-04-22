@@ -19,7 +19,8 @@ _rt-tokio = ["sqlx-macros-core/_rt-tokio"]
 
 _tls-native-tls = ["sqlx-macros-core/_tls-native-tls"]
 _tls-rustls-aws-lc-rs = ["sqlx-macros-core/_tls-rustls-aws-lc-rs"]
-_tls-rustls-ring = ["sqlx-macros-core/_tls-rustls-ring"]
+_tls-rustls-ring-webpki = ["sqlx-macros-core/_tls-rustls-ring-webpki"]
+_tls-rustls-ring-native-roots = ["sqlx-macros-core/_tls-rustls-ring-native-roots"]
 
 # SQLx features
 derive = ["sqlx-macros-core/derive"]
@@ -36,6 +37,7 @@ sqlite-unbundled = ["sqlx-macros-core/sqlite-unbundled"]
 bigdecimal = ["sqlx-macros-core/bigdecimal"]
 bit-vec = ["sqlx-macros-core/bit-vec"]
 chrono = ["sqlx-macros-core/chrono"]
+ipnet = ["sqlx-macros-core/ipnet"]
 ipnetwork = ["sqlx-macros-core/ipnetwork"]
 mac_address = ["sqlx-macros-core/mac_address"]
 rust_decimal = ["sqlx-macros-core/rust_decimal"]
