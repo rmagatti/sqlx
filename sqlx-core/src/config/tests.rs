@@ -118,7 +118,7 @@ fn test_migrate_env_var_support() {
     let config = Config::default();
     
     assert_eq!(config.table_name(), "test_migrations");
-    assert_eq!(config.postgres_schema(), Some("test_schema"));
+    assert_eq!(config.postgres_schema(), Some("test_schema".to_string()));
 }
 
 #[test]

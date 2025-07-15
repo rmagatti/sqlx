@@ -140,7 +140,7 @@ pub async fn info(
     // Also create the schema for PostgreSQL if specified
     if conn.backend_name() == "PostgreSQL" {
         if let Some(schema) = config.migrate.postgres_schema() {
-            conn.create_schema_if_not_exists(schema).await?;
+            conn.create_schema_if_not_exists(&schema).await?;
         }
     }
 
@@ -248,7 +248,7 @@ pub async fn run(
     // Also create the schema for PostgreSQL if specified
     if conn.backend_name() == "PostgreSQL" {
         if let Some(schema) = config.migrate.postgres_schema() {
-            conn.create_schema_if_not_exists(schema).await?;
+            conn.create_schema_if_not_exists(&schema).await?;
         }
     }
 
@@ -359,7 +359,7 @@ pub async fn revert(
     // Also create the schema for PostgreSQL if specified
     if conn.backend_name() == "PostgreSQL" {
         if let Some(schema) = config.migrate.postgres_schema() {
-            conn.create_schema_if_not_exists(schema).await?;
+            conn.create_schema_if_not_exists(&schema).await?;
         }
     }
 
