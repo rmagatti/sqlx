@@ -1,5 +1,17 @@
 use crate::config::{self, Config};
 use std::collections::BTreeSet;
+use std::sync::Once;
+
+// Initialize environment variables once for all tests
+static INIT: Once = Once::new();
+
+fn init_test_env() {
+    INIT.call_once(|| {
+        // Set consistent test values that won't interfere with each other
+        std::env::set_var("SQLX_MIGRATIONS_TABLE", "test_migrations");
+        std::env::set_var("SQLX_MIGRATIONS_SCHEMA", "test_schema");
+    });
+}
 
 #[test]
 fn reference_parses_as_config() {
@@ -91,4 +103,63 @@ fn assert_migrate_config(config: &config::migrate::Config) {
         config.defaults.migration_versioning,
         DefaultVersioning::Sequential
     );
+    
+    // Test PostgreSQL schema configuration
+    assert_eq!(config.drivers.postgres.schema.as_deref(), Some("my_migrations"));
+}
+
+#[test]
+fn test_migrate_env_var_support() {
+    use config::migrate::Config;
+    
+    init_test_env();
+    
+    // Test that environment variables are properly read
+    let config = Config::default();
+    
+    assert_eq!(config.table_name(), "test_migrations");
+    assert_eq!(config.postgres_schema(), Some("test_schema"));
+}
+
+#[test]
+fn test_qualified_table_names() {
+    use config::migrate::Config;
+    
+    init_test_env();
+    
+    let config = Config::default();
+    
+    // Test PostgreSQL gets schema-qualified name
+    assert_eq!(config.qualified_table_name("postgres"), "test_schema.test_migrations");
+    assert_eq!(config.qualified_table_name("postgresql"), "test_schema.test_migrations");
+    assert_eq!(config.qualified_table_name("PostgreSQL"), "test_schema.test_migrations");
+    
+    // Test other databases get just the table name
+    assert_eq!(config.qualified_table_name("mysql"), "test_migrations");
+    assert_eq!(config.qualified_table_name("sqlite"), "test_migrations");
+    assert_eq!(config.qualified_table_name("MariaDB"), "test_migrations");
+}
+
+#[test]
+fn test_migrate_defaults_without_env() {
+    use config::migrate::Config;
+    
+    // This test verifies behavior when env vars are NOT set
+    // We test this by creating the config with explicit None values
+    let config = Config {
+        create_schemas: Default::default(),
+        table_name: None,
+        migrations_dir: Default::default(),
+        ignored_chars: Default::default(),
+        defaults: Default::default(),
+        drivers: config::migrate::Drivers {
+            postgres: config::migrate::Postgres {
+                schema: None,
+            },
+        },
+    };
+    
+    assert_eq!(config.table_name(), "_sqlx_migrations");
+    assert_eq!(config.postgres_schema(), None);
+    assert_eq!(config.qualified_table_name("postgres"), "public._sqlx_migrations");
 }

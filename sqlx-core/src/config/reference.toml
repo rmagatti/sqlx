@@ -198,3 +198,14 @@ migration-versioning = "sequential"
 
 # Specify timestamp versioning by default.
 # migration-versioning = "timestamp"
+
+# PostgreSQL-specific configuration options
+[migrate.drivers.postgres]
+# Override the schema for the migrations table.
+#
+# Defaults to the value of `SQLX_MIGRATIONS_SCHEMA` environment variable, or "public" if not set.
+# When specified, the migrations table will be created as `<schema>.<table_name>`.
+#
+# ### Note
+# This is only supported for PostgreSQL. Other databases will ignore this setting.
+schema = "my_migrations"

@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 /// if the proper precautions are not taken.
 ///
 /// Be sure you know what you are doing and that you read all relevant documentation _thoroughly_.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 #[cfg_attr(
     feature = "sqlx-toml",
     derive(serde::Deserialize),
@@ -116,6 +116,9 @@ pub struct Config {
 
     /// Specify default options for new migrations created with `sqlx migrate add`.
     pub defaults: MigrationDefaults,
+
+    /// Database-specific configuration options.
+    pub drivers: Drivers,
 }
 
 #[derive(Debug, Default)]
@@ -194,6 +197,60 @@ pub enum DefaultVersioning {
     Sequential,
 }
 
+/// Database-specific migration configuration.
+#[derive(Debug, Default)]
+#[cfg_attr(
+    feature = "sqlx-toml",
+    derive(serde::Deserialize),
+    serde(default, rename_all = "kebab-case", deny_unknown_fields)
+)]
+pub struct Drivers {
+    /// PostgreSQL-specific migration configuration.
+    pub postgres: Postgres,
+}
+
+/// PostgreSQL-specific migration configuration.
+#[derive(Debug)]
+#[cfg_attr(
+    feature = "sqlx-toml",
+    derive(serde::Deserialize),
+    serde(default, rename_all = "kebab-case", deny_unknown_fields)
+)]
+pub struct Postgres {
+    /// Override the schema for the migrations table.
+    /// 
+    /// Defaults to the value of `SQLX_MIGRATIONS_SCHEMA` environment variable, or "public" if not set.
+    ///
+    /// ### Example
+    /// `sqlx.toml`:
+    /// ```toml
+    /// [migrate.drivers.postgres]
+    /// schema = "my_migrations"
+    /// ```
+    pub schema: Option<Box<str>>,
+}
+
+impl Default for Postgres {
+    fn default() -> Self {
+        Self {
+            schema: std::env::var("SQLX_MIGRATIONS_SCHEMA").ok().map(Into::into),
+        }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            create_schemas: Default::default(),
+            table_name: std::env::var("SQLX_MIGRATIONS_TABLE").ok().map(Into::into),
+            migrations_dir: Default::default(),
+            ignored_chars: Default::default(),
+            defaults: Default::default(),
+            drivers: Default::default(),
+        }
+    }
+}
+
 #[cfg(feature = "migrate")]
 impl Config {
     pub fn migrations_dir(&self) -> &str {
@@ -202,6 +259,28 @@ impl Config {
 
     pub fn table_name(&self) -> &str {
         self.table_name.as_deref().unwrap_or("_sqlx_migrations")
+    }
+
+    /// Get the qualified table name for a specific database.
+    /// 
+    /// For PostgreSQL, this returns `schema.table` format.
+    /// For other databases, this returns just the table name.
+    pub fn qualified_table_name(&self, database_kind: &str) -> String {
+        match database_kind.to_lowercase().as_str() {
+            "postgres" | "postgresql" => {
+                let schema = self.drivers.postgres.schema
+                    .as_deref()
+                    .unwrap_or("public");
+                format!("{}.{}", schema, self.table_name())
+            }
+            _ => self.table_name().to_string(),
+        }
+    }
+    
+    /// Get the schema name for PostgreSQL migrations.
+    /// Returns None for other databases.
+    pub fn postgres_schema(&self) -> Option<&str> {
+        self.drivers.postgres.schema.as_deref()
     }
 
     pub fn to_resolve_config(&self) -> crate::migrate::ResolveConfig {

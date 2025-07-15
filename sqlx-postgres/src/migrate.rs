@@ -17,11 +17,6 @@ use crate::query_as::query_as;
 use crate::query_scalar::query_scalar;
 use crate::{PgConnectOptions, PgConnection, Postgres};
 
-lazy_static::lazy_static! {
-    static ref MIGRATIONS_TABLE: String = std::env::var("SQLX_MIGRATIONS_TABLE").unwrap_or_else(|_| "_sqlx_migrations".into());
-    static ref MIGRATIONS_SCHEMA: String = std::env::var("SQLX_MIGRATIONS_SCHEMA").unwrap_or_else(|_| "public".into());
-}
-
 fn parse_for_maintenance(url: &str) -> Result<(PgConnectOptions, String), Error> {
     let mut options = PgConnectOptions::from_str(url)?;
 
@@ -114,15 +109,8 @@ impl Migrate for PgConnection {
         schema_name: &'e str,
     ) -> BoxFuture<'e, Result<(), MigrateError>> {
         Box::pin(async move {
-            // Create the schema from environment variable (our custom feature)
-            self.execute(AssertSqlSafe(format!(
-                r#"CREATE SCHEMA IF NOT EXISTS {}"#,
-                *MIGRATIONS_SCHEMA
-            )))
-            .await?;
-
-            // Also create the schema passed as parameter (upstream feature)
-            if schema_name != *MIGRATIONS_SCHEMA {
+            // Create the schema if it's not empty
+            if !schema_name.is_empty() {
                 self.execute(AssertSqlSafe(format!(
                     r#"CREATE SCHEMA IF NOT EXISTS {schema_name};"#
                 )))
@@ -139,10 +127,9 @@ impl Migrate for PgConnection {
     ) -> BoxFuture<'e, Result<(), MigrateError>> {
         Box::pin(async move {
             // language=SQL
-            // Use environment variables to construct the full table name
             self.execute(AssertSqlSafe(format!(
                 r#"
-CREATE TABLE IF NOT EXISTS {}.{} (
+CREATE TABLE IF NOT EXISTS {table_name} (
     version BIGINT PRIMARY KEY,
     description TEXT NOT NULL,
     installed_on TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -150,8 +137,7 @@ CREATE TABLE IF NOT EXISTS {}.{} (
     checksum BYTEA NOT NULL,
     execution_time BIGINT NOT NULL
 );
-                "#,
-                *MIGRATIONS_SCHEMA, *MIGRATIONS_TABLE
+                "#
             )))
             .await?;
 
@@ -166,8 +152,7 @@ CREATE TABLE IF NOT EXISTS {}.{} (
         Box::pin(async move {
             // language=SQL
             let row: Option<(i64,)> = query_as(AssertSqlSafe(format!(
-                "SELECT version FROM {}.{} WHERE success = false ORDER BY version LIMIT 1",
-                *MIGRATIONS_SCHEMA, *MIGRATIONS_TABLE
+                "SELECT version FROM {table_name} WHERE success = false ORDER BY version LIMIT 1"
             )))
             .fetch_optional(self)
             .await?;
@@ -183,8 +168,7 @@ CREATE TABLE IF NOT EXISTS {}.{} (
         Box::pin(async move {
             // language=SQL
             let rows: Vec<(i64, Vec<u8>)> = query_as(AssertSqlSafe(format!(
-                "SELECT version, checksum FROM {}.{} ORDER BY version",
-                *MIGRATIONS_SCHEMA, *MIGRATIONS_TABLE
+                "SELECT version, checksum FROM {table_name} ORDER BY version"
             )))
             .fetch_all(self)
             .await?;
@@ -268,11 +252,10 @@ CREATE TABLE IF NOT EXISTS {}.{} (
             #[allow(clippy::cast_possible_truncation)]
             let _ = query(AssertSqlSafe(format!(
                 r#"
-    UPDATE {}.{}
+    UPDATE {table_name}
     SET execution_time = $1
     WHERE version = $2
-                "#,
-                *MIGRATIONS_SCHEMA, *MIGRATIONS_TABLE
+                "#
             )))
             .bind(elapsed.as_nanos() as i64)
             .bind(migration.version)
@@ -322,10 +305,9 @@ async fn execute_migration(
     // language=SQL
     let _ = query(AssertSqlSafe(format!(
         r#"
-    INSERT INTO {}.{} ( version, description, success, checksum, execution_time )
+    INSERT INTO {table_name} ( version, description, success, checksum, execution_time )
     VALUES ( $1, $2, TRUE, $3, -1 )
-                "#,
-        *MIGRATIONS_SCHEMA, *MIGRATIONS_TABLE
+                "#
     )))
     .bind(migration.version)
     .bind(&*migration.description)
@@ -348,8 +330,7 @@ async fn revert_migration(
 
     // language=SQL
     let _ = query(AssertSqlSafe(format!(
-        r#"DELETE FROM {}.{} WHERE version = $1"#,
-        *MIGRATIONS_SCHEMA, *MIGRATIONS_TABLE
+        r#"DELETE FROM {table_name} WHERE version = $1"#
     )))
     .bind(migration.version)
     .execute(conn)

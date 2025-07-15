@@ -136,12 +136,21 @@ pub async fn info(
     for schema_name in &config.migrate.create_schemas {
         conn.create_schema_if_not_exists(schema_name).await?;
     }
+    
+    // Also create the schema for PostgreSQL if specified
+    if conn.backend_name() == "PostgreSQL" {
+        if let Some(schema) = config.migrate.postgres_schema() {
+            conn.create_schema_if_not_exists(schema).await?;
+        }
+    }
 
-    conn.ensure_migrations_table(config.migrate.table_name())
+    let table_name = config.migrate.qualified_table_name(conn.backend_name());
+    
+    conn.ensure_migrations_table(&table_name)
         .await?;
 
     let applied_migrations: HashMap<_, _> = conn
-        .list_applied_migrations(config.migrate.table_name())
+        .list_applied_migrations(&table_name)
         .await?
         .into_iter()
         .map(|m| (m.version, m))
@@ -230,21 +239,29 @@ pub async fn run(
     }
 
     let mut conn = crate::connect(connect_opts).await?;
+    let table_name = config.migrate.qualified_table_name(conn.backend_name());
 
     for schema_name in &config.migrate.create_schemas {
         conn.create_schema_if_not_exists(schema_name).await?;
     }
+    
+    // Also create the schema for PostgreSQL if specified
+    if conn.backend_name() == "PostgreSQL" {
+        if let Some(schema) = config.migrate.postgres_schema() {
+            conn.create_schema_if_not_exists(schema).await?;
+        }
+    }
 
-    conn.ensure_migrations_table(config.migrate.table_name())
+    conn.ensure_migrations_table(&table_name)
         .await?;
 
-    let version = conn.dirty_version(config.migrate.table_name()).await?;
+    let version = conn.dirty_version(&table_name).await?;
     if let Some(version) = version {
         bail!(MigrateError::Dirty(version));
     }
 
     let applied_migrations = conn
-        .list_applied_migrations(config.migrate.table_name())
+        .list_applied_migrations(&table_name)
         .await?;
     validate_applied_migrations(&applied_migrations, &migrator, ignore_missing)?;
 
@@ -283,7 +300,7 @@ pub async fn run(
                 let elapsed = if dry_run || skip {
                     Duration::new(0, 0)
                 } else {
-                    conn.apply(config.migrate.table_name(), migration).await?
+                    conn.apply(&table_name, migration).await?
                 };
                 let text = if skip {
                     "Skipped"
@@ -332,22 +349,30 @@ pub async fn revert(
     }
 
     let mut conn = crate::connect(connect_opts).await?;
+    let table_name = config.migrate.qualified_table_name(conn.backend_name());
 
     // FIXME: we should not be creating anything here if it doesn't exist
     for schema_name in &config.migrate.create_schemas {
         conn.create_schema_if_not_exists(schema_name).await?;
     }
+    
+    // Also create the schema for PostgreSQL if specified
+    if conn.backend_name() == "PostgreSQL" {
+        if let Some(schema) = config.migrate.postgres_schema() {
+            conn.create_schema_if_not_exists(schema).await?;
+        }
+    }
 
-    conn.ensure_migrations_table(config.migrate.table_name())
+    conn.ensure_migrations_table(&table_name)
         .await?;
 
-    let version = conn.dirty_version(config.migrate.table_name()).await?;
+    let version = conn.dirty_version(&table_name).await?;
     if let Some(version) = version {
         bail!(MigrateError::Dirty(version));
     }
 
     let applied_migrations = conn
-        .list_applied_migrations(config.migrate.table_name())
+        .list_applied_migrations(&table_name)
         .await?;
     validate_applied_migrations(&applied_migrations, &migrator, ignore_missing)?;
 
@@ -382,7 +407,7 @@ pub async fn revert(
             let elapsed = if dry_run || skip {
                 Duration::new(0, 0)
             } else {
-                conn.revert(config.migrate.table_name(), migration).await?
+                conn.revert(&table_name, migration).await?
             };
             let text = if skip {
                 "Skipped"
