@@ -124,7 +124,7 @@ impl Migrate for PgConnection {
             // Also create the schema passed as parameter (upstream feature)
             if schema_name != *MIGRATIONS_SCHEMA {
                 self.execute(AssertSqlSafe(format!(
-                    r#"CREATE SCHEMA IF NOT EXISTS {schema_name};"
+                    r#"CREATE SCHEMA IF NOT EXISTS {schema_name};"#
                 )))
                 .await?;
             }
