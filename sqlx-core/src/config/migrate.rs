@@ -257,8 +257,20 @@ impl Config {
         self.migrations_dir.as_deref().unwrap_or("migrations")
     }
 
-    pub fn table_name(&self) -> &str {
-        self.table_name.as_deref().unwrap_or("_sqlx_migrations")
+    pub fn table_name(&self) -> String {
+        let schema = self.postgres_schema();
+        let table_name = if let Some(schema) = schema {
+            if let Some(table_name) = self.table_name.as_deref() {
+                format!("{schema}.{table_name}")
+            } else {
+                format!("{}.{}", schema, "_sqlx_migrations")
+            }
+        } else {
+            self.table_name.as_deref().unwrap_or("_sqlx_migrations").to_string()
+        };
+
+        // Return the table name, possibly schema-qualified.
+        table_name
     }
 
     /// Get the qualified table name for a specific database.
@@ -286,7 +298,7 @@ impl Config {
                     "_sqlx_migrations".to_string()
                 };
                 
-                format!("{}.{}", schema, table)
+                format!("{schema}.{table}")
             }
             _ => self.table_name().to_string(),
         }
