@@ -118,6 +118,7 @@ pub fn expand_with_path(config: &Config, path: &Path) -> crate::Result<TokenStre
         .map(|(migration, path)| QuoteMigration { migration, path });
 
     let table_name = config.migrate.table_name();
+    let table_name_str = table_name.as_str();
 
     let create_schemas = config.migrate.create_schemas.iter().map(|schema_name| {
         quote! { ::std::borrow::Cow::Borrowed(#schema_name) }
@@ -141,7 +142,7 @@ pub fn expand_with_path(config: &Config, path: &Path) -> crate::Result<TokenStre
                     #(#migrations),*
             ]}),
             create_schemas: ::std::borrow::Cow::Borrowed(&[#(#create_schemas),*]),
-            table_name: ::std::borrow::Cow::Borrowed(#table_name),
+            table_name: ::std::borrow::Cow::Borrowed(#table_name_str),
             ..::sqlx::migrate::Migrator::DEFAULT
         }
     })
