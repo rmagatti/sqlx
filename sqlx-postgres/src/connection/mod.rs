@@ -35,8 +35,6 @@ mod tls;
 /// See [`PgConnectOptions`] for connection URL reference.
 pub struct PgConnection {
     pub(crate) inner: Box<PgConnectionInner>,
-    // pub migration_table: String,
-    // pub migration_schema: Option<String>
 }
 
 pub struct PgConnectionInner {

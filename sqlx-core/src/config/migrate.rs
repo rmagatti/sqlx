@@ -218,7 +218,7 @@ pub struct Drivers {
 )]
 pub struct Postgres {
     /// Override the schema for the migrations table.
-    /// 
+    ///
     /// Defaults to the value of `SQLX_MIGRATIONS_SCHEMA` environment variable, or "public" if not set.
     ///
     /// ### Example
@@ -266,48 +266,22 @@ impl Config {
                 format!("{}.{}", schema, "_sqlx_migrations")
             }
         } else {
-            self.table_name.as_deref().unwrap_or("_sqlx_migrations").to_string()
+            self.table_name
+                .as_deref()
+                .unwrap_or("_sqlx_migrations")
+                .to_string()
         };
 
         // Return the table name, possibly schema-qualified.
         table_name
     }
 
-    /// Get the qualified table name for a specific database.
-    /// 
-    /// For PostgreSQL, this returns `schema.table` format.
-    /// For other databases, this returns just the table name.
-    pub fn qualified_table_name(&self, database_kind: &str) -> String {
-        match database_kind.to_lowercase().as_str() {
-            "postgres" | "postgresql" => {
-                // First check config, then environment variable
-                let schema = if let Some(schema) = self.drivers.postgres.schema.as_deref() {
-                    schema.to_string()
-                } else if let Ok(env_schema) = std::env::var("SQLX_MIGRATIONS_SCHEMA") {
-                    env_schema
-                } else {
-                    "public".to_string()
-                };
-                
-                // For table name, check config first, then env var
-                let table = if let Some(table) = self.table_name.as_deref() {
-                    table.to_string()
-                } else if let Ok(env_table) = std::env::var("SQLX_MIGRATIONS_TABLE") {
-                    env_table
-                } else {
-                    "_sqlx_migrations".to_string()
-                };
-                
-                format!("{schema}.{table}")
-            }
-            _ => self.table_name().to_string(),
-        }
-    }
-    
     /// Get the schema name for PostgreSQL migrations.
     /// Returns None for other databases.
     pub fn postgres_schema(&self) -> Option<String> {
-        self.drivers.postgres.schema
+        self.drivers
+            .postgres
+            .schema
             .as_deref()
             .map(|s| s.to_string())
             .or_else(|| std::env::var("SQLX_MIGRATIONS_SCHEMA").ok())

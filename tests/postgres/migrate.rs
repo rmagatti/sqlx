@@ -3,7 +3,6 @@ use sqlx::pool::PoolConnection;
 use sqlx::postgres::{PgConnection, Postgres};
 use sqlx::Executor;
 use sqlx::Row;
-use sqlx_postgres::MIGRATION_TABLE;
 use std::path::Path;
 
 #[sqlx::test(migrations = false)]
@@ -93,9 +92,7 @@ async fn clean_up(conn: &mut PgConnection) -> anyhow::Result<()> {
     conn.execute("DROP TABLE migrations_reversible_test")
         .await
         .ok();
-    conn.execute(&*format!("DROP TABLE {MIGRATION_TABLE}"))
-        .await
-        .ok();
+    conn.execute("DROP TABLE _sqlx_migrations").await.ok();
 
     Ok(())
 }
