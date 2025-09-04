@@ -21,7 +21,8 @@ use crate::connection::execute;
 use crate::connection::ConnectionState;
 use crate::{Sqlite, SqliteArguments, SqliteQueryResult, SqliteRow, SqliteStatement};
 
-use super::serialize::{deserialize, serialize, SchemaName, SqliteOwnedBuf};
+#[cfg(feature = "deserialize")]
+use crate::connection::deserialize::{deserialize, serialize, SchemaName, SqliteOwnedBuf};
 
 // Each SQLite connection has a dedicated thread.
 
@@ -62,15 +63,17 @@ enum Command {
     },
     Execute {
         query: SqlStr,
-        arguments: Option<SqliteArguments<'static>>,
+        arguments: Option<SqliteArguments>,
         persistent: bool,
         tx: flume::Sender<Result<Either<SqliteQueryResult, SqliteRow>, Error>>,
         limit: Option<usize>,
     },
+    #[cfg(feature = "deserialize")]
     Serialize {
         schema: Option<SchemaName>,
         tx: oneshot::Sender<Result<SqliteOwnedBuf, Error>>,
     },
+    #[cfg(feature = "deserialize")]
     Deserialize {
         schema: Option<SchemaName>,
         data: SqliteOwnedBuf,
@@ -210,6 +213,7 @@ impl ConnectionWorker {
                         Command::Begin { tx, statement } => {
                             let depth = shared.transaction_depth.load(Ordering::Acquire);
 
+                            let is_custom_statement = statement.is_some();
                             let statement = match statement {
                                 // custom `BEGIN` statements are not allowed if
                                 // we're already in a transaction (we need to
@@ -226,8 +230,14 @@ impl ConnectionWorker {
                             let res =
                                 conn.handle
                                     .exec(statement.as_str())
-                                    .map(|_| {
+                                    .and_then(|res| {
+                                        if is_custom_statement && !conn.handle.in_transaction() {
+                                            return Err(Error::BeginFailed)
+                                        }
+
                                         shared.transaction_depth.fetch_add(1, Ordering::Release);
+
+                                        Ok(res)
                                     });
                             let res_ok = res.is_ok();
 
@@ -302,9 +312,11 @@ impl ConnectionWorker {
                                 }
                             }
                         }
+                        #[cfg(feature = "deserialize")]
                         Command::Serialize { schema, tx } => {
                             tx.send(serialize(&mut conn, schema)).ok();
                         }
+                        #[cfg(feature = "deserialize")]
                         Command::Deserialize { schema, data, read_only, tx } => {
                             tx.send(deserialize(&mut conn, schema, data, read_only)).ok();
                         }
@@ -348,7 +360,7 @@ impl ConnectionWorker {
     pub(crate) async fn execute(
         &mut self,
         query: SqlStr,
-        args: Option<SqliteArguments<'_>>,
+        args: Option<SqliteArguments>,
         chan_size: usize,
         persistent: bool,
         limit: Option<usize>,
@@ -359,7 +371,7 @@ impl ConnectionWorker {
             .send_async((
                 Command::Execute {
                     query,
-                    arguments: args.map(SqliteArguments::into_static),
+                    arguments: args,
                     persistent,
                     tx,
                     limit,
@@ -397,6 +409,7 @@ impl ConnectionWorker {
         self.oneshot_cmd(|tx| Command::Ping { tx }).await
     }
 
+    #[cfg(feature = "deserialize")]
     pub(crate) async fn deserialize(
         &mut self,
         schema: Option<SchemaName>,
@@ -412,6 +425,7 @@ impl ConnectionWorker {
         .await?
     }
 
+    #[cfg(feature = "deserialize")]
     pub(crate) async fn serialize(
         &mut self,
         schema: Option<SchemaName>,

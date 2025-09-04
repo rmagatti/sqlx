@@ -10,8 +10,8 @@ use std::ptr::NonNull;
 
 use futures_intrusive::sync::MutexGuard;
 use libsqlite3_sys::{
-    sqlite3, sqlite3_commit_hook, sqlite3_get_autocommit, sqlite3_progress_handler,
-    sqlite3_rollback_hook, sqlite3_update_hook, SQLITE_DELETE, SQLITE_INSERT, SQLITE_UPDATE,
+    sqlite3, sqlite3_commit_hook, sqlite3_progress_handler, sqlite3_rollback_hook,
+    sqlite3_update_hook, SQLITE_DELETE, SQLITE_INSERT, SQLITE_UPDATE,
 };
 #[cfg(feature = "preupdate-hook")]
 pub use preupdate_hook::*;
@@ -40,7 +40,9 @@ mod handle;
 pub(crate) mod intmap;
 #[cfg(feature = "preupdate-hook")]
 mod preupdate_hook;
-pub(crate) mod serialize;
+
+#[cfg(feature = "deserialize")]
+pub(crate) mod deserialize;
 
 mod worker;
 
@@ -542,11 +544,6 @@ impl LockedSqliteHandle<'_> {
 
     pub fn last_error(&mut self) -> Option<SqliteError> {
         self.guard.handle.last_error()
-    }
-
-    pub(crate) fn in_transaction(&mut self) -> bool {
-        let ret = unsafe { sqlite3_get_autocommit(self.as_raw_handle().as_ptr()) };
-        ret == 0
     }
 }
 

@@ -124,6 +124,8 @@ fn init_metadata(manifest_dir: &String) -> crate::Result<Metadata> {
         .map(|s| s.eq_ignore_ascii_case("true") || s == "1")
         .unwrap_or(false);
 
+    let offline_dir = env("SQLX_OFFLINE_DIR").ok().or(offline_dir);
+
     let config = Config::try_from_crate_or_default()?;
 
     let database_url = env(config.common.database_url_var()).ok().or(database_url);
@@ -229,7 +231,7 @@ where
     let (query_data, offline): (QueryData<DB>, bool) = match data_source {
         QueryDataSource::Cached(dyn_data) => (QueryData::from_dyn_data(dyn_data)?, true),
         QueryDataSource::Live { database_url, .. } => {
-            let describe = DB::describe_blocking(&input.sql, database_url)?;
+            let describe = DB::describe_blocking(&input.sql, database_url, &config.drivers)?;
             (QueryData::from_describe(&input.sql, describe), false)
         }
     };

@@ -1,3 +1,23 @@
+//! # SQLx CLI
+//!
+//! Command-line utility for the [SQLx](https://github.com/launchbadge/sqlx) ecosystem.
+//!
+//! This crate provides the core logic for the `sqlx` command-line interface, enabling database management,
+//! migrations, and offline query preparation for Rust projects using SQLx.
+//!
+//! ### Note: Semver Exempt API
+//! The API of this crate is not meant for general use and does *not* follow Semantic Versioning.
+//! The only crate that follows Semantic Versioning in the project is the `sqlx` crate itself.
+//! If you are building a custom SQLx driver, you should pin an exact version for `sqlx-cli` to
+//! avoid breakages:
+//!
+//! ```toml
+//! sqlx-cli = { version = "=0.9.0" }
+//! ```
+//!
+//! And then make releases in lockstep with `sqlx-cli`. We recommend all driver crates, in-tree
+//! or otherwise, use the same version numbers as `sqlx-cli` to avoid confusion.
+
 use std::future::Future;
 use std::io;
 use std::time::Duration;
@@ -9,15 +29,15 @@ use tokio::{select, signal};
 
 use crate::opt::{Command, ConnectOpts, DatabaseCommand, MigrateCommand};
 
-mod database;
-mod metadata;
+pub mod database;
+pub mod metadata;
 // mod migration;
 // mod migrator;
 #[cfg(feature = "completions")]
-mod completions;
-mod migrate;
-mod opt;
-mod prepare;
+pub mod completions;
+pub mod migrate;
+pub mod opt;
+pub mod prepare;
 
 pub use crate::opt::Opt;
 
@@ -177,7 +197,7 @@ async fn do_run(opt: Opt) -> anyhow::Result<()> {
         } => {
             let config = config.load_config().await?;
             connect_opts.populate_db_url(&config)?;
-            prepare::run(check, all, workspace, connect_opts, args).await?
+            prepare::run(&config, check, all, workspace, connect_opts, args).await?
         }
 
         #[cfg(feature = "completions")]
@@ -188,27 +208,9 @@ async fn do_run(opt: Opt) -> anyhow::Result<()> {
 }
 
 /// Attempt to connect to the database server, retrying up to `ops.connect_timeout`.
-async fn connect(opts: &ConnectOpts) -> anyhow::Result<AnyConnection> {
+async fn connect(config: &Config, opts: &ConnectOpts) -> anyhow::Result<AnyConnection> {
     retry_connect_errors(opts, move |url| {
-        // This only handles the default case. For good support of
-        // the new command line options, we need to work out some
-        // way to make the appropriate ConfigOpt available here. I
-        // suspect that that infrastructure would be useful for
-        // other things in the future, as well, but it also seems
-        // like an extensive and intrusive change.
-        //
-        // On the other hand, the compile-time checking macros
-        // can't be configured to use a different config file at
-        // all, so I believe this is okay for the time being.
-        let config = Some(std::path::PathBuf::from("sqlx.toml")).and_then(|p| {
-            if p.exists() {
-                Some(p)
-            } else {
-                None
-            }
-        });
-
-        async move { AnyConnection::connect_with_config(url, config.clone()).await }
+        AnyConnection::connect_with_driver_config(url, &config.drivers)
     })
     .await
 }

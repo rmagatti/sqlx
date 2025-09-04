@@ -95,7 +95,7 @@ impl TestDatabase {
 
         let config = Config::default();
 
-        conn.list_applied_migrations(config.migrate.table_name())
+        conn.list_applied_migrations(&config.migrate.table_name())
             .await
             .unwrap()
             .iter()

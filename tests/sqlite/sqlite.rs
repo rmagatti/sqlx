@@ -214,7 +214,12 @@ async fn it_executes_with_pool() -> anyhow::Result<()> {
 async fn it_opens_with_extension() -> anyhow::Result<()> {
     use std::str::FromStr;
 
-    let opts = SqliteConnectOptions::from_str(&dotenvy::var("DATABASE_URL")?)?.extension("ipaddr");
+    let mut opts = SqliteConnectOptions::from_str(&dotenvy::var("DATABASE_URL")?)?;
+
+    // SAFETY: the `sqlite_ipaddr` cfg is only enabled when we want to test this.
+    unsafe {
+        opts = opts.extension("ipaddr");
+    }
 
     let mut conn = SqliteConnection::connect_with(&opts).await?;
     conn.execute("SELECT ipmasklen('192.168.16.12/24');")
@@ -1370,6 +1375,28 @@ async fn it_can_use_transaction_options() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[sqlx_macros::test]
+async fn it_can_recover_from_bad_transaction_begin() -> anyhow::Result<()> {
+    let mut conn = SqliteConnectOptions::new()
+        .in_memory(true)
+        .connect()
+        .await
+        .unwrap();
+
+    // This statement doesn't actually start a transaction.
+    assert!(conn.begin_with("SELECT 1").await.is_err());
+
+    // Transaction state bookkeeping should be correctly reset.
+
+    let mut tx = conn.begin_with("BEGIN IMMEDIATE").await?;
+    let value = sqlx::query_scalar::<_, i32>("SELECT 1")
+        .fetch_one(&mut *tx)
+        .await?;
+    assert_eq!(value, 1);
+
+    Ok(())
+}
+
 fn transaction_state(handle: &mut LockedSqliteHandle) -> SqliteTransactionState {
     use libsqlite3_sys::{sqlite3_txn_state, SQLITE_TXN_NONE, SQLITE_TXN_READ, SQLITE_TXN_WRITE};
 
@@ -1388,4 +1415,26 @@ enum SqliteTransactionState {
     None,
     Read,
     Write,
+}
+
+#[sqlx_macros::test]
+async fn issue_3982() -> anyhow::Result<()> {
+    let mut conn = new::<Sqlite>().await?;
+
+    let r = sqlx::raw_sql("insert into products(product_no) values(1)")
+        .execute(&mut conn)
+        .await?;
+    assert_eq!(r.rows_affected(), 1);
+
+    let (name,) = sqlx::query_as::<_, (Option<String>,)>(
+        r#"
+        select name from products where name IS NULL
+        "#,
+    )
+    .fetch_one(&mut conn)
+    .await?;
+
+    assert_eq!(name, None,);
+
+    Ok(())
 }
